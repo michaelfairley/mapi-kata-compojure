@@ -21,7 +21,8 @@
   (letfn [(add-error [errors field message]
             (update-in errors [field] (fnil #(conj % message) [])))]
             (cond-> {}
-                    (username-taken? (params "username")) (add-error :username "is taken"))))
+                    (username-taken? (params "username")) (add-error :username "is taken")
+                    (< (count (params "password")) 6) (add-error :password "is too short"))))
 
 
 (defroutes app-routes
