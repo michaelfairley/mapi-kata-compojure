@@ -5,7 +5,8 @@
   (:require [compojure.handler :as handler]
             [compojure.route :as route]
             [ring.util.response :as response]
-            [ring.middleware.json :as json]))
+            [ring.middleware.json :as json]
+            [noir.util.crypt :as crypt]))
 
 (defdb db (postgres {:db "microblog_api_kata"}))
 (defentity users)
@@ -31,7 +32,9 @@
         (let [errors (user-errors body)]
           (if (empty? errors)
             (do
-              (insert users (values {:username (body "username") :realname (body "real_name")}))
+              (insert users (values {:username (body "username")
+                                     :realname (body "real_name")
+                                     :password (crypt/encrypt (body "password"))}))
               (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))
             {:status 422
              :body {:errors errors}})))

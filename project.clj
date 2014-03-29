@@ -6,7 +6,8 @@
                  [ring/ring-json "0.2.0"]
                  [korma "0.3.0-RC6"]
                  [org.clojure/java.jdbc "0.2.3"]
-                 [org.postgresql/postgresql "9.2-1002-jdbc4"]]
+                 [org.postgresql/postgresql "9.2-1002-jdbc4"]
+                 [lib-noir "0.8.1"]]
   :plugins [[lein-ring "0.8.10"]]
   :ring {:handler mapi-kata-clojure.handler/app
          :port 12346}
