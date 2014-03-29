@@ -17,15 +17,23 @@
    (:cnt)
    (< 0)))
 
+(defn user-errors [params]
+  (letfn [(add-error [errors field message]
+            (update-in errors [field] (fnil #(conj % message) [])))]
+            (cond-> {}
+                    (username-taken? (params "username")) (add-error :username "is taken"))))
+
+
 (defroutes app-routes
   (GET "/" [] "Hello World")
   (POST "/users" {body :body}
-        (if (username-taken? (body "username"))
-          {:status 422
-           :body {:errors {:username ["is taken"]}}}
-          (do
-            (insert users (values {:username (body "username") :realname (body "real_name")}))
-            (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))))
+        (let [errors (user-errors body)]
+          (if (empty? errors)
+            (do
+              (insert users (values {:username (body "username") :realname (body "real_name")}))
+              (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))
+            {:status 422
+             :body {:errors errors}})))
   (GET "/users/:username" [username]
        (let [user (first (select users (where {:username username}) (limit 1)))]
          (response/response {
