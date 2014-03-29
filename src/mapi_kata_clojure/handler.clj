@@ -10,11 +10,22 @@
 (defdb db (postgres {:db "microblog_api_kata"}))
 (defentity users)
 
+(defn username-taken? [username]
+  (->>
+   (select users (where {:username username}) (limit 1) (aggregate (count :*) :cnt))
+   (first)
+   (:cnt)
+   (< 0)))
+
 (defroutes app-routes
   (GET "/" [] "Hello World")
   (POST "/users" {body :body}
-        (insert users (values {:username (body "username") :realname (body "real_name")}))
-        (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))
+        (if (username-taken? (body "username"))
+          {:status 422
+           :body {:errors {:username ["is taken"]}}}
+          (do
+            (insert users (values {:username (body "username") :realname (body "real_name")}))
+            (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))))
   (GET "/users/:username" [username]
        (let [user (first (select users (where {:username username}) (limit 1)))]
          (response/response {
