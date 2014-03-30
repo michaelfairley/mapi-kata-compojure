@@ -10,13 +10,10 @@
 
 (defdb db (postgres {:db "microblog_api_kata"}))
 (defentity users)
+(defentity tokens)
 
 (defn username-taken? [username]
-  (->>
-   (select users (where {:username username}) (limit 1) (aggregate (count :*) :cnt))
-   (first)
-   (:cnt)
-   (< 0)))
+  (not (nil? (user-with-username username))))
 
 (defn user-errors [params]
   (letfn [(add-error [errors field message]
@@ -25,6 +22,11 @@
                     (username-taken? (params "username")) (add-error :username "is taken")
                     (< (count (params "password")) 6) (add-error :password "is too short"))))
 
+(defn user-with-username [username]
+  (first (select users (where {:username username}) (limit 1))))
+
+(defn random-token []
+  (java.util.UUID/randomUUID))
 
 (defroutes app-routes
   (GET "/" [] "Hello World")
@@ -38,8 +40,18 @@
               (response/redirect-after-post (format "http://localhost:12346/users/%s" (body "username"))))
             {:status 422
              :body {:errors errors}})))
+  (POST "/tokens" {body :body}
+        (let [user (user-with-username (body "username"))
+              token (random-token)]
+          (cond
+           (nil? user) {:status 401}
+           (not (crypt/compare (body "password") (user :password))) {:status 401}
+           :ekse (do
+                   (insert tokens (values {:user_id (user :id)
+                                  :value token}))
+                   (response/response {:token token})))))
   (GET "/users/:username" [username]
-       (let [user (first (select users (where {:username username}) (limit 1)))]
+       (let [user (user-with-username username)]
          (response/response {
                              :username (user :username)
                              :real_name (user :realname)
