@@ -6,11 +6,14 @@
             [compojure.route :as route]
             [ring.util.response :as response]
             [ring.middleware.json :as json]
-            [noir.util.crypt :as crypt]))
+            [noir.util.crypt :as crypt]
+            [com.duelinmarkers.ring-request-logging :as logging]))
 
 (defdb db (postgres {:db "microblog_api_kata"}))
 (defentity users)
 (defentity tokens)
+(defentity posts
+  (belongs-to users {:fk :user_id}))
 
 (defn user-with-username [username]
   (first (select users (where {:username username}) (limit 1))))
@@ -21,9 +24,16 @@
 (defn user-errors [params]
   (letfn [(add-error [errors field message]
             (update-in errors [field] (fnil #(conj % message) [])))]
-            (cond-> {}
-                    (username-taken? (params "username")) (add-error :username "is taken")
-                    (< (count (params "password")) 6) (add-error :password "is too short"))))
+    (cond-> {}
+            (username-taken? (params "username")) (add-error :username "is taken")
+            (< (count (params "password")) 6) (add-error :password "is too short"))))
+
+(defn post-with-id [id]
+  (first (select posts
+                 (with users)
+                 (fields :text [:users.username :author_username])
+                 (where {:id id})
+                 (limit 1))))
 
 (defn random-token []
   (java.util.UUID/randomUUID))
@@ -48,19 +58,28 @@
            (not (crypt/compare (body "password") (user :password))) {:status 401}
            :ekse (do
                    (insert tokens (values {:user_id (user :id)
-                                  :value token}))
+                                           :value token}))
                    (response/response {:token token})))))
   (GET "/users/:username" [username]
        (let [user (user-with-username username)]
-         (response/response {
-                             :username (user :username)
+         (response/response {:username (user :username)
                              :real_name (user :realname)
                              :followers []
                              :following []})))
+  (POST "/users/:username/posts" {body :body, {username :username} :params}
+        (let [user (user-with-username username)
+              post (insert posts (values {:user_id (user :id),
+                                          :text (body "text")}))]
+          (response/redirect-after-post (format "http://localhost:12346/posts/%d" (post :id)))))
+  (GET "/posts/:id" [id]
+       (let [post (post-with-id (Integer/parseInt id))]
+         (response/response {:text (post :text)
+                             :author (post :author_username)})))
   (route/resources "/")
   (route/not-found "Not Found"))
 
 (def app
   (-> (handler/site app-routes)
+      logging/wrap-request-logging
       json/wrap-json-body
       json/wrap-json-response))
