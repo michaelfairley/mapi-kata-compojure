@@ -12,6 +12,9 @@
 (defentity users)
 (defentity tokens)
 
+(defn user-with-username [username]
+  (first (select users (where {:username username}) (limit 1))))
+
 (defn username-taken? [username]
   (not (nil? (user-with-username username))))
 
@@ -21,9 +24,6 @@
             (cond-> {}
                     (username-taken? (params "username")) (add-error :username "is taken")
                     (< (count (params "password")) 6) (add-error :password "is too short"))))
-
-(defn user-with-username [username]
-  (first (select users (where {:username username}) (limit 1))))
 
 (defn random-token []
   (java.util.UUID/randomUUID))
