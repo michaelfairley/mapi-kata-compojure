@@ -15,6 +15,17 @@
 (defentity posts
   (belongs-to users {:fk :user_id}))
 
+(defn wrap-user [handler]
+  (fn [request]
+    (-> (some->
+         (get-in request [:headers "authentication"])
+         (#(second (re-matches #"Token (.*)" %)))
+         (#(first (select tokens (where {:value %}) (limit 1))))
+         (#(first (select users (where {:id (% :user_id)}) (limit 1))))
+         (#(assoc request :user %)))
+        (or request)
+        (handler))))
+
 (defn user-with-username [username]
   (first (select users (where {:username username}) (limit 1))))
 
@@ -37,6 +48,12 @@
 
 (defn random-token []
   (java.util.UUID/randomUUID))
+
+(defn user-from-authentication [authentication]
+  (let [[_ raw] (re-matches #"Token (.*)" authentication)
+        [token] (first (select tokens (where {:token raw}) (limit 1)))
+        [user] (first (select users (where {:id (token :user_id)})))]
+    user))
 
 (defroutes app-routes
   (GET "/" [] "Hello World")
@@ -66,11 +83,15 @@
                              :real_name (user :realname)
                              :followers []
                              :following []})))
-  (POST "/users/:username/posts" {body :body, {username :username} :params}
-        (let [user (user-with-username username)
-              post (insert posts (values {:user_id (user :id),
-                                          :text (body "text")}))]
-          (response/redirect-after-post (format "http://localhost:12346/posts/%d" (post :id)))))
+  (POST "/users/:username/posts" {body :body, {username :username} :params, user :user}
+        (if user
+          (let [user2 (user-with-username username)]
+                (if (= (:id user) (:id user2))
+                  (let [post (insert posts (values {:user_id (user2 :id),
+                                                    :text (body "text")}))]
+                    (response/redirect-after-post (format "http://localhost:12346/posts/%d" (post :id))))
+                  {:status 403}))
+          {:status 401}))
   (GET "/posts/:id" [id]
        (let [post (post-with-id (Integer/parseInt id))]
          (response/response {:text (post :text)
@@ -80,6 +101,7 @@
 
 (def app
   (-> (handler/site app-routes)
+      (wrap-user)
       logging/wrap-request-logging
       json/wrap-json-body
       json/wrap-json-response))
