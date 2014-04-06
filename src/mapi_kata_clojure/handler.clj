@@ -93,9 +93,10 @@
                   {:status 403}))
           {:status 401}))
   (GET "/posts/:id" [id]
-       (let [post (post-with-id (Integer/parseInt id))]
+       (if-let [post (post-with-id (Integer/parseInt id))]
          (response/response {:text (post :text)
-                             :author (post :author_username)})))
+                             :author (post :author_username)})
+         (response/not-found {})))
   (route/resources "/")
   (route/not-found "Not Found"))
 
