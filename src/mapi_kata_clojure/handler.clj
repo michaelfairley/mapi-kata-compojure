@@ -21,7 +21,7 @@
          (get-in request [:headers "authentication"])
          (#(second (re-matches #"Token (.*)" %)))
          (#(first (select tokens (where {:value %}) (limit 1))))
-         (#(first (select users (where {:id (% :user_id)}) (limit 1))))
+         (#(first (select users (fields [:id]) (where {:id (% :user_id)}) (limit 1))))
          (#(assoc request :user %)))
         (or request)
         (handler))))
@@ -42,7 +42,7 @@
 (defn post-with-id [id]
   (first (select posts
                  (with users)
-                 (fields :text [:users.username :author_username])
+                 (fields :text :user_id [:users.username :author_username])
                  (where {:id id})
                  (limit 1))))
 
@@ -73,7 +73,7 @@
           (cond
            (nil? user) {:status 401}
            (not (crypt/compare (body "password") (user :password))) {:status 401}
-           :ekse (do
+           :else (do
                    (insert tokens (values {:user_id (user :id)
                                            :value token}))
                    (response/response {:token token})))))
@@ -97,6 +97,16 @@
          (response/response {:text (post :text)
                              :author (post :author_username)})
          (response/not-found {})))
+  (DELETE "/posts/:id" {{id :id} :params, user :user}
+          (if user
+            (if-let [post (post-with-id (Integer/parseInt id))]
+              (if (= (user :id) (post :user_id))
+                (do
+                  (delete posts (where {:id (Integer/parseInt id)}))
+                  {:status 204})
+                {:status 403})
+              (response/not-found {}))
+            {:status 401}))
   (route/resources "/")
   (route/not-found "Not Found"))
 
