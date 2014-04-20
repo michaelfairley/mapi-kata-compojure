@@ -46,6 +46,14 @@
                  (where {:id id})
                  (limit 1))))
 
+(defn posts-for-author [author_id]
+  (select posts
+          (where {:user_id author_id})
+          (with users)
+          (fields :id :text [:users.username :author])
+          (order :id :DESC)
+          (limit 50)))
+
 (defn random-token []
   (java.util.UUID/randomUUID))
 
@@ -107,6 +115,11 @@
                 {:status 403})
               (response/not-found {}))
             {:status 401}))
+  (GET "/users/:username/posts" [username]
+       (if-let [user (user-with-username username)]
+         (let [posts (posts-for-author (user :id))]
+           (response/response {:posts posts}))
+         (response/not-found {})))
   (route/resources "/")
   (route/not-found "Not Found"))
 
