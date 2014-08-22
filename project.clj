@@ -8,7 +8,8 @@
                  [org.clojure/java.jdbc "0.2.3"]
                  [org.postgresql/postgresql "9.2-1002-jdbc4"]
                  [lib-noir "0.8.1"]
-                 [com.duelinmarkers/ring-request-logging "0.2.0"]]
+                 [com.duelinmarkers/ring-request-logging "0.2.0"]
+                 [blackwater "0.0.9"]]
   :plugins [[lein-ring "0.8.10"]]
   :ring {:handler mapi-kata-clojure.handler/app
          :port 12346}

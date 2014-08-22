@@ -7,10 +7,14 @@
             [ring.util.response :as response]
             [ring.middleware.json :as json]
             [noir.util.crypt :as crypt]
-            [com.duelinmarkers.ring-request-logging :as logging]))
+            [com.duelinmarkers.ring-request-logging :as logging]
+            [black.water.korma :as blackwater]))
+
+(blackwater/decorate-korma!)
 
 (defdb db (postgres {:db "microblog_api_kata"}))
 (defentity users)
+(defentity followings)
 (defentity tokens)
 (defentity posts
   (belongs-to users {:fk :user_id}))
@@ -56,6 +60,20 @@
       (limit 50)
       (select)))
 
+(defn follow! [follower followee]
+  (insert followings (values {:follower_id (follower :id)
+                              :followee_id (followee :id)})))
+
+(defn followers [user]
+  (select users
+          (join :inner followings (= :followings.follower_id :id))
+          (where {:followings.followee_id (user :id)})))
+
+(defn followees [user]
+  (select users
+          (join :inner followings (= :followings.followee_id :id))
+          (where {:followings.follower_id (user :id)})))
+
 (defn random-token []
   (java.util.UUID/randomUUID))
 
@@ -91,8 +109,8 @@
        (let [user (user-with-username username)]
          (response/response {:username (user :username)
                              :real_name (user :realname)
-                             :followers []
-                             :following []})))
+                             :followers (map :username (followers user))
+                             :following (map :username (followees user))})))
   (POST "/users/:username/posts" {body :body, {username :username} :params, user :user}
         (if user
           (let [user2 (user-with-username username)]
@@ -124,6 +142,14 @@
             {:posts posts
              :next (str "/users/" username "/posts?after=" (:id (last posts)))}))
          (response/not-found {})))
+  (PUT "/users/:username/following/:other" [username other]
+       (let [user (user-with-username username)
+             other-user (user-with-username other)]
+         (if (and user other-user)
+           (do
+             (follow! user other-user)
+             {:status 201})
+           (response/not-found {}))))
   (route/resources "/")
   (route/not-found "Not Found"))
 
